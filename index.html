@@ -77,23 +77,38 @@
     function extractVideoId(input) {
       if (!input) return null;
 
+      const cleaned = input.trim();
+
       // If user pastes a raw 11-char video ID.
-      if (/^[a-zA-Z0-9_-]{11}$/.test(input)) {
-        return input;
+      if (/^[a-zA-Z0-9_-]{11}$/.test(cleaned)) {
+        return cleaned;
+      }
+
+      // Fast path for common YouTube URL shapes anywhere in the pasted text.
+      const directMatch = cleaned.match(
+        /(?:youtube\.com\/(?:watch\?v=|live\/|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/
+      );
+      if (directMatch) {
+        return directMatch[1];
       }
 
       try {
-        const url = new URL(input);
+        const url = new URL(cleaned);
         const host = url.hostname.replace(/^www\./, '');
 
         if (host === 'youtu.be') {
-          return url.pathname.slice(1).split('/')[0] || null;
+          const id = url.pathname.slice(1).split('/')[0] || null;
+          return /^[a-zA-Z0-9_-]{11}$/.test(id || '') ? id : null;
         }
 
-        if (host === 'youtube.com' || host === 'm.youtube.com') {
+        if (
+          host === 'youtube.com' ||
+          host === 'm.youtube.com' ||
+          host === 'music.youtube.com'
+        ) {
           // Standard watch URL: /watch?v=VIDEO_ID
           const vParam = url.searchParams.get('v');
-          if (vParam) return vParam;
+          if (/^[a-zA-Z0-9_-]{11}$/.test(vParam || '')) return vParam;
 
           // Supports /live/VIDEO_ID, /embed/VIDEO_ID, /shorts/VIDEO_ID
           const parts = url.pathname.split('/').filter(Boolean);
@@ -102,7 +117,8 @@
           );
 
           if (keyIndex !== -1 && parts[keyIndex + 1]) {
-            return parts[keyIndex + 1];
+            const id = parts[keyIndex + 1];
+            if (/^[a-zA-Z0-9_-]{11}$/.test(id)) return id;
           }
         }
       } catch (_) {
