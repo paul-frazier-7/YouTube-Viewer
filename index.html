@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <title>Minimal YouTube Embed</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:,">
   <style>
     body {
       margin: 0;
@@ -14,6 +15,7 @@
       color: #fff;
       font-family: sans-serif;
     }
+
     #controls {
       padding: 10px;
       background: #111;
@@ -21,6 +23,7 @@
       gap: 10px;
       align-items: center;
     }
+
     input {
       flex: 1;
       padding: 8px;
@@ -28,6 +31,7 @@
       border-radius: 4px;
       font-size: 14px;
     }
+
     button {
       padding: 8px 12px;
       border: none;
@@ -37,13 +41,16 @@
       font-size: 14px;
       cursor: pointer;
     }
+
     button:hover {
       background: #cc1c13;
     }
+
     #player {
       flex: 1;
       display: flex;
     }
+
     iframe {
       width: 100%;
       height: 100%;
@@ -56,39 +63,83 @@
     <input type="text" id="youtubeUrl" placeholder="Paste YouTube link here...">
     <button onclick="loadVideo()">Load Video</button>
   </div>
+
   <div id="player">
-    <iframe id="youtubeFrame"
+    <iframe
+      id="youtubeFrame"
       src=""
-      frameborder="0"
       allow="autoplay; encrypted-media"
       allowfullscreen>
     </iframe>
   </div>
 
   <script>
-    // Extracts YouTube video ID from URL
-    function extractVideoId(url) {
-      const regExp = /(?:youtube\.com\/.*v=|youtu\.be\/)([^&#?]+)/;
-      const match = url.match(regExp);
-      return match ? match[1] : null;
+    function extractVideoId(input) {
+      if (!input) return null;
+
+      // If user pastes a raw 11-char video ID.
+      if (/^[a-zA-Z0-9_-]{11}$/.test(input)) {
+        return input;
+      }
+
+      try {
+        const url = new URL(input);
+        const host = url.hostname.replace(/^www\./, '');
+
+        if (host === 'youtu.be') {
+          return url.pathname.slice(1).split('/')[0] || null;
+        }
+
+        if (host === 'youtube.com' || host === 'm.youtube.com') {
+          // Standard watch URL: /watch?v=VIDEO_ID
+          const vParam = url.searchParams.get('v');
+          if (vParam) return vParam;
+
+          // Supports /live/VIDEO_ID, /embed/VIDEO_ID, /shorts/VIDEO_ID
+          const parts = url.pathname.split('/').filter(Boolean);
+          const keyIndex = parts.findIndex(part =>
+            part === 'live' || part === 'embed' || part === 'shorts'
+          );
+
+          if (keyIndex !== -1 && parts[keyIndex + 1]) {
+            return parts[keyIndex + 1];
+          }
+        }
+      } catch (_) {
+        return null;
+      }
+
+      return null;
     }
 
-    // Update iframe with given YouTube video ID
     function updateYouTubeVideo(videoId) {
       const iframe = document.getElementById('youtubeFrame');
-      iframe.src =
-        `https://www.youtube.com/embed/${videoId}` +
-        `?rel=0&modestbranding=1&iv_load_policy=3&playsinline=1&controls=0&disablekb=1`;
+      const params = new URLSearchParams({
+        autoplay: '1',
+        rel: '0',
+        modestbranding: '1',
+        iv_load_policy: '3',
+        playsinline: '1',
+        controls: '1'
+      });
+
+      // YouTube embeds are more reliable when a valid HTTP(S) origin/referrer exists.
+      if (window.location.protocol === 'http:' || window.location.protocol === 'https:') {
+        params.set('origin', window.location.origin);
+        params.set('widget_referrer', window.location.href);
+      }
+
+      iframe.src = `https://www.youtube.com/embed/${videoId}?${params.toString()}`;
     }
 
-    // Called when button clicked
     function loadVideo() {
       const url = document.getElementById('youtubeUrl').value.trim();
       const videoId = extractVideoId(url);
+
       if (videoId) {
         updateYouTubeVideo(videoId);
       } else {
-        alert("Invalid YouTube URL");
+        alert('Invalid YouTube URL');
       }
     }
   </script>
